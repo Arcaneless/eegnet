@@ -114,7 +114,7 @@ def extract_epochs():
 
 
 def plot_psd(num):
-    assert num in runMove
+    assert 0 <= num < len(files)
     # plotting
     files[num].plot_psd(fmax=30)
 
@@ -177,13 +177,12 @@ def run_model():
 
 def predict_model():
     probs = model.predict(X_test)
-    print(probs)
     preds = probs.argmax(axis=-1)
     acc = np.mean(preds == Y_test.argmax(axis=-1))
 
     # RESULTS
     print("Classification accuracy: %.4f " % (acc))
-    confusion_matrix(Y_test.argmax(axis=-1), preds)
+    print(confusion_matrix(Y_test.argmax(axis=-1), preds))
 
     fig, ax = plt.subplots(2)
     ax[0].plot(losses)
@@ -194,14 +193,24 @@ def predict_model():
     ax[1].set_xlabel('Epochs')
     plt.show()
 
+    return acc
+
 
 if __name__ == '__main__':
     read_file()
-    plot_psd(0)
+    for i in range(len(runMove)):
+        plot_psd(i)
     extract_epochs()
     build_data()
     encode_reshape()
-    init_model()
-    compile_model()
-    run_model()
-    predict_model()
+    average_acc = 0
+    trials = 10
+    for i in range(trials):
+        print(f'Run: {i+1}')
+        init_model()
+        compile_model()
+        run_model()
+        acc = predict_model()
+        average_acc += acc
+
+    print(f'average accuracy over {trials} trials: {average_acc / trials}')
