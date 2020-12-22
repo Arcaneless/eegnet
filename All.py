@@ -28,12 +28,11 @@ import matplotlib.pyplot as plt
 # =========================================
 #               PARAMETERS
 # =========================================
-tmin = -.1
-tmax = 1.1
+tmin = -0.1
+tmax = 2
 
 # Reading segment
-# Will be only reading P05
-object_names = 'P05'
+object_names = ['P01', 'P02', 'P03', 'P04', 'P05', 'P06', 'P07', 'P08', 'P09', 'P10']
 runMove = [3, 4, 5, 6, 7, 10, 11, 12, 13] # these are runs with attempted movement
 
 # Paradigm description
@@ -87,9 +86,9 @@ class LossAndAccRecord(Callback):
 # from object name
 
 
-def read_file():
+def read_file(object_name):
     for i in runMove:
-        files.append(read_raw_gdf(f'..\\{object_names}\\{object_names} Run {i}.gdf', stim_channel=None, eog=[61, 62, 63], preload=True))
+        files.append(read_raw_gdf(f'..\\{object_name}\\{object_name} Run {i}.gdf', stim_channel=None, eog=[61, 62, 63], preload=True))
 
 
 def extract_epochs():
@@ -97,7 +96,7 @@ def extract_epochs():
     epochs_list = []
     for file in files:
         # band pass filter
-        file.filter(0, 30, method='iir')
+        # file.filter(0.1, 100, method='fir')
         event, _ = mne.events_from_annotations(file)
         # build event id and filter 1-7 id
 
@@ -113,10 +112,10 @@ def extract_epochs():
     result_epochs = mne.concatenate_epochs(epochs_list)
 
 
-def plot_psd(num, fmin, fmax):
+def plot_psd(num):
     assert 0 <= num < len(files)
     # plotting
-    files[num].plot_psd(fmin=fmin, fmax=fmax)
+    files[num].plot_psd(fmax=30)
 
 
 def build_data():
@@ -171,7 +170,7 @@ def compile_model():
 
 def run_model():
     global model
-    model.fit(X_train, Y_train, batch_size=20, epochs=40,
+    model.fit(X_train, Y_train, batch_size=20, epochs=50,
                             verbose=1, callbacks=[checkpointer, LossAndAccRecord()])
 
 
@@ -184,14 +183,14 @@ def predict_model():
     print("Classification accuracy: %.4f " % (acc))
     print(confusion_matrix(Y_test.argmax(axis=-1), preds))
 
-    fig, ax = plt.subplots(2)
-    ax[0].plot(losses)
-    ax[0].set_ylabel('Loss')
-    ax[0].set_xlabel('Epochs')
-    ax[1].plot(accs)
-    ax[1].set_ylabel('Accuracy')
-    ax[1].set_xlabel('Epochs')
-    plt.show()
+    # fig, ax = plt.subplots(2)
+    # ax[0].plot(losses)
+    # ax[0].set_ylabel('Loss')
+    # ax[0].set_xlabel('Epochs')
+    # ax[1].plot(accs)
+    # ax[1].set_ylabel('Accuracy')
+    # ax[1].set_xlabel('Epochs')
+    # plt.show()
 
     return acc
 
@@ -201,20 +200,31 @@ def predict_model():
 
 
 if __name__ == '__main__':
-    read_file()
-    for i in range(len(runMove)):
-        plot_psd(i, fmin=0, fmax=30)
-    extract_epochs()
-    build_data()
-    encode_reshape()
-    average_acc = 0
-    trials = 10
-    for i in range(trials):
-        print(f'Run: {i+1}')
-        init_model()
-        compile_model()
-        run_model()
-        acc = predict_model()
-        average_acc += acc
+    total_arr = {
+        'Object Name': [],
+        'Mean': [],
+        'Std': []
+    }
+    for object_name in object_names:
+        read_file(object_name)
+        # for i in range(len(runMove)):
+        #     plot_psd(i)
+        extract_epochs()
+        build_data()
+        encode_reshape()
+        acc_arr = np.array([])
+        trials = 10
+        for i in range(trials):
+            print(f'{object_name}: Run {i+1}')
+            init_model()
+            compile_model()
+            run_model()
+            acc = predict_model()
+            acc_arr = np.append(acc_arr, [acc])
 
-    print(f'average accuracy over {trials} trials: {average_acc / trials}')
+        print(f'average accuracy over {trials} trials: {np.mean(acc_arr)}')
+        total_arr['Object Name'].append(object_name)
+        total_arr['Mean'].append(np.mean(acc_arr))
+        total_arr['Std'].append(np.std(acc_arr))
+
+    print(pd.DataFrame(data=total_arr))
